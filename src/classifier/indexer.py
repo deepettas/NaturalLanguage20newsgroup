@@ -3,15 +3,19 @@ import operator
 import os
 from math import log
 
+from src._config import classifierSettings
+
 import nltk
 from nltk.stem.wordnet import WordNetLemmatizer
 import string
 
 
 class DocumentIndexer:
-    _inv_idx_path = '../data'
-    _tagged_docs_path = '../data/tagged_docs'
-    _document_database_path = '../dataset/20-newsgroups/'
+    settings = classifierSettings()
+
+    _inv_idx_path = '../' + settings.inverted_index_path
+    _tagged_docs_path = '../' + settings.tagged_documents_path
+    _document_database_path = '../' + settings.dataset_path
     _index = {}
 
     def __init__(self, document_list_paths=None, silent=False):
