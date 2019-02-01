@@ -10,6 +10,15 @@ from nltk import WordNetLemmatizer
 from src.classifier.indexer import DocumentIndexer
 from src.classifier.metrics import VectorMetrics
 
+def choose_random_categories(num):
+    chosen = []
+    while len(chosen) < num and len(chosen) <= 20:
+        selection = (randint(1,20) - 1)
+        if selection  not in chosen:
+            chosen.append(selection)
+
+    return chosen
+
 
 
 class DocClassifier:
@@ -21,8 +30,10 @@ class DocClassifier:
     _characteristics_strings = []
     _total_docs_in_e = 0
 
-    def __init__(self,categories=None, settings = None):
+    def __init__(self, settings = None):
 
+
+        # Importing the settings
         if settings == None:
             settings = classifierSettings().generate_random_settings()
 
@@ -32,14 +43,17 @@ class DocClassifier:
         metric_type = settings.evaluation_metric
         silent = not settings.verbose
 
+        # Loading all of our untagged files
+        untagged_files = [f for f in os.listdir(os.path.join(os.pardir, settings.dataset_path))]
 
-        if categories is None:
-            self._categories = []
-        else:
-            self._categories = categories
-            for cat in categories:
-                self._category_dict[cat] = []
+        cat_ids = choose_random_categories(len(untagged_files))
 
+        self._categories = [untagged_files[cat_id] for cat_id in cat_ids]
+
+        for cat in self._categories:
+            self._category_dict[cat] = []
+
+        # Applying the selected settings
         self._docs_per_cat = docs_per_cat
         self._training_ratio = training_ratio
         self._characteristic_num = characteristic_num
