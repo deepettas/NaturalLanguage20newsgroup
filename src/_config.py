@@ -22,6 +22,7 @@ train_ratio = 0.7
 # 1 for Cosine similarity 2 for Jaccard Index
 evaluation_metric = 1
 
+# Algorithm verbosity
 verbose = True
 
 

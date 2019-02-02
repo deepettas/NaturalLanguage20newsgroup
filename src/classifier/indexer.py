@@ -18,7 +18,7 @@ class DocumentIndexer:
     _document_database_path = '../' + settings.dataset_path
     _index = {}
 
-    def __init__(self, document_list_paths=None, silent=False):
+    def __init__(self, document_list_paths=None, verbose=False):
 
         # load docs for indexing into memory
         if document_list_paths is None:
@@ -27,7 +27,7 @@ class DocumentIndexer:
             self._document_list_paths = document_list_paths
 
         # verbosity
-        self._silent = silent
+        self._verbose = verbose
 
         # Creation of cache data folders
         if not os.path.exists(self._inv_idx_path):
@@ -128,7 +128,7 @@ class DocumentIndexer:
         :param num:
         :return:
         """
-        if not self._silent:
+        if self._verbose:
             print('Creating characteristics.. ', end='')
         characteristics = {}
 
@@ -142,7 +142,7 @@ class DocumentIndexer:
         for i in range(num):
             to_return[sorted_x[i][0]] = self._index[sorted_x[i][0]]
 
-        if not self._silent:
+        if self._verbose:
             print('OK')
 
         return to_return
@@ -171,14 +171,14 @@ class DocumentIndexer:
             content_pos_tagged_no_closed = self._remove_closed_class_categories(content_pos_tagged)
             self._index = self._add_content_to_index(self._index, content_pos_tagged_no_closed, file)
 
-            if not self._silent:
+            if self._verbose:
                 print('\r[' + s + '/' + str(total_docs) + '] Tagged and added to index: ' + file, end='')
             count += 1
 
-        if not self._silent:
+        if self._verbose:
             print('\r[' + str(total_docs) + '/' + str(total_docs) + '] All tagged! ', end='')
             print('\nUpdating index weights... ', end='')
         self._index = self._update_index_with_weights(self._index, total_docs)
 
-        if not self._silent:
+        if self._verbose:
             print('OK')

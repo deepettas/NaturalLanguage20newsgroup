@@ -45,7 +45,7 @@ class DocClassifier:
         self._docs_per_cat = settings.documents_per_category
         self._training_ratio = settings.train_ratio
         self._characteristic_num = settings.number_of_features
-        self._silent = not settings.verbose
+        self._verbose = settings.verbose
         self._metric_type = settings.evaluation_metric
 
         # Load all untagged files
@@ -70,7 +70,7 @@ class DocClassifier:
             print('No categories chosen.. Terminating.')
             return
 
-        if not self._silent:
+        if self._verbose:
             print('-Forming E and A sets... ', end='')
 
         for category in self._category_dict.keys():
@@ -97,7 +97,7 @@ class DocClassifier:
                 else:
                     self._category_dict[category].append((doc_list[i], 'A'))  # (A will have 'A' in the tuple)
 
-        if not self._silent:
+        if self._verbose:
             print('OK')
 
     def _index_and_extract_characteristics(self):
@@ -117,7 +117,7 @@ class DocClassifier:
 
         # Perform indexing
         self._total_docs_in_e = len(docs_to_be_indexed)
-        indexer = DocumentIndexer(docs_to_be_indexed, self._silent)
+        indexer = DocumentIndexer(docs_to_be_indexed, self._verbose)
         indexer.start()
 
         # 'characteristics' will have a part of the original index,
@@ -134,9 +134,9 @@ class DocClassifier:
         # (one tuple for every document already belonging in that category).
         # The tuple will contain the filename in first index
         # and the vector for the characteristics in second index
-        for category in self._category_dict.keys():
+        for category, doc_list in self._category_dict.items():
             self._category_models[category] = []
-            for doc in self._category_dict[category]:
+            for doc in doc_list:
                 if doc[1] == 'A':  # we stop at the testing data
                     break
                 self._category_models[category].append((doc[0], [0 for _ in range(self._characteristic_num)]))
@@ -173,14 +173,17 @@ class DocClassifier:
         :return:
         """
 
-        if not self._silent:
+        if self._verbose:
             print('\n-Performing indexing of E set and extraction of characteristics.. ')
+
         self._index_and_extract_characteristics()
 
-        if not self._silent:
+        if self._verbose:
             print('\n-Generating category models.. ', end='')
+
         self._generate_models()
-        if not self._silent:
+
+        if self._verbose:
             print('OK')
             print('\n-Training Complete!')
 
@@ -238,27 +241,26 @@ class DocClassifier:
         wordnet_lemmatizer = WordNetLemmatizer()
         total_tests = 0
         correct_decisions = 0
-        for category in self._category_dict.keys():
+        for category, doc_list in self._category_dict.items():
             # list all docs of the category
-            for doc in self._category_dict[category]:
+            for doc in doc_list:
                 if doc[1] == 'E':  # skip training set docs
                     continue
 
                 total_tests += 1
-                if not self._silent:
+                if self._verbose:
                     print('-Test #' + str(total_tests) + ' category: ' + category + ', doc name: ' + doc[
                         0] + '\n-Generating model.. ', end='')
                 model = self._generate_test_model(category, doc[0], wordnet_lemmatizer)
-                if not self._silent:
+                if self._verbose:
                     print('OK')
 
-                if not self._silent:
+                if not self._verbose:
                     print('-Comparing models.. ', end='')
                 similarities = {}
-                for category_model in self._category_models.keys():
-                    s = 0
-                    c = 0
-                    for doc_model in self._category_models[category_model]:
+                for category_model, doc_models in self._category_models.items():
+                    s,c = (0,0)
+                    for doc_model in doc_models:
                         c += 1
                         s += self._calc_similarity(doc_model[1], model)
                     similarities[category_model] = s / c
@@ -266,7 +268,7 @@ class DocClassifier:
 
                 if decision == category:
                     correct_decisions += 1
-                if not self._silent:
+                if self._verbose:
                     print('OK\n-Decision: ' + decision + ' (Accuracy so far: ' + str(
                         correct_decisions * 100 / total_tests) + '%) \n')
 
@@ -289,9 +291,7 @@ class DocClassifier:
     # noinspection PyBroadException
     def _cosine_sim(self, x, y):
         try:
-            a = 0
-            b = 0
-            c = 0
+            a,b,c = (0,0,0) # initializing the variables
             for i in range(0, len(x)):
                 a += x[i] * y[i]
                 b += pow(x[i], 2)
