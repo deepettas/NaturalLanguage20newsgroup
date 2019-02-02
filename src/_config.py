@@ -11,13 +11,13 @@ tagged_documents_path = inverted_index_path + '/tagged_docs'
 number_of_categories = 20
 
 # Number of documents to compile per category
-documents_per_category = 5
+documents_per_category = 20
 
 # Number of features/characteristics
-number_of_features = 5
+number_of_features = 10
 
 # Training ratio. Accepted values 0 < x < 1
-train_ratio = 0.7
+train_ratio = 0.6
 
 # 1 for Cosine similarity 2 for Jaccard Index
 evaluation_metric = 1
