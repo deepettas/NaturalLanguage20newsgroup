@@ -1,12 +1,11 @@
-from random import randint
-import os
 from src.classifier.classifier import DocClassifier
-from src._config import classifierSettings
+from src._config import ClassifierSettings
 
 if __name__ == '__main__':
-    Settings = classifierSettings()
+    Settings = ClassifierSettings()
 
-    # actual entry point of algorithm
+    # instantiation of classifier, set formation, training & testing
     document_classifier = DocClassifier(Settings)
+    document_classifier.form_doc_sets()
     document_classifier.train()
     document_classifier.test()

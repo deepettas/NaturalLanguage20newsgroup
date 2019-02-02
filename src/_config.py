@@ -1,11 +1,10 @@
 from random import randint
 
-
 # Classifier Settings:
 
 # Working paths
-dataset_path = 'dataset/20-newsgroups/'
-inverted_index_path = 'data'
+dataset_path = 'dataset/20_newsgroups/'
+inverted_index_path = 'cached_data'
 tagged_documents_path = inverted_index_path + '/tagged_docs'
 
 # Number of categories to be randomly chosen
@@ -20,15 +19,16 @@ number_of_features = 5
 # Training ratio. Accepted values 0 < x < 1
 train_ratio = 0.7
 
-# 1 for Cosine similarity 2 for Jaccard Idex
+# 1 for Cosine similarity 2 for Jaccard Index
 evaluation_metric = 1
 
 verbose = True
-#-----------------------------------------------
 
 
-class classifierSettings():
+# -----------------------------------------------
 
+
+class ClassifierSettings():
     dataset_path = dataset_path
     inverted_index_path = inverted_index_path
     tagged_documents_path = tagged_documents_path
@@ -40,15 +40,9 @@ class classifierSettings():
     evaluation_metric = evaluation_metric
     verbose = verbose
 
-
-
-
-
     def generate_random_settings(self):
-        self.number_of_categories = randint(0,20)
+        self.number_of_categories = randint(0, 20)
         self.documents_per_category = randint(3, 10)
-        self.number_of_features = randint(3,7)
+        self.number_of_features = randint(3, 7)
         self.train_ratio = randint(1, 9) * 0.1
-        self.evaluation_metric = randint(1,2)
-
-
+        self.evaluation_metric = randint(1, 2)

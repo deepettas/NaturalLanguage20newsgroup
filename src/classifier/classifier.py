@@ -1,118 +1,149 @@
 import os
 import string
-from math import ceil, log
+from math import ceil, log, sqrt, pow
 from random import randint
 
-from src._config import classifierSettings
+from src._config import ClassifierSettings
 import nltk
 from nltk import WordNetLemmatizer
 
 from src.classifier.indexer import DocumentIndexer
-from src.classifier.metrics import VectorMetrics
+
 
 def choose_random_categories(num):
+    """
+    Returns list of num random ids
+    for category selection
+    :param num:
+    :return:
+    """
     chosen = []
-    while len(chosen) < num and len(chosen) <= 20:
-        selection = (randint(1,20) - 1)
-        if selection  not in chosen:
+    while len(chosen) < num:
+        selection = (randint(1, 20) - 1)
+        if selection not in chosen:
             chosen.append(selection)
 
     return chosen
 
 
-
 class DocClassifier:
     _category_dict = {}
-    _document_database_path = 'dataset/20-newsgroups/'
-    _tagged_docs_path = 'cashed_data/tagged_news/'
     _characteristics = {}
     _category_models = {}
     _characteristics_strings = []
-    _total_docs_in_e = 0
 
-    def __init__(self, settings = None):
-
+    def __init__(self, settings=None):
 
         # Importing the settings
-        if settings == None:
-            settings = classifierSettings().generate_random_settings()
+        if settings is None:
+            settings = ClassifierSettings().generate_random_settings()
 
-        docs_per_cat = settings.documents_per_category
-        training_ratio = settings.train_ratio
-        characteristic_num = settings.number_of_features
-        metric_type = settings.evaluation_metric
-        silent = not settings.verbose
+        # Init classifier with selected settings
+        self._document_database_path = settings.dataset_path
+        self._tagged_docs_path = settings.tagged_documents_path
+        self._num_of_categories = settings.number_of_categories
+        self._docs_per_cat = settings.documents_per_category
+        self._training_ratio = settings.train_ratio
+        self._characteristic_num = settings.number_of_features
+        self._silent = not settings.verbose
+        self._metric_type = settings.evaluation_metric
 
-        # Loading all of our untagged files
-        untagged_files = [f for f in os.listdir(os.path.join(os.pardir, settings.dataset_path))]
+        # Load all untagged files
+        untagged_files = [f for f in os.listdir(os.path.join(os.path.pardir, settings.dataset_path))]
 
-        cat_ids = choose_random_categories(len(untagged_files))
+        category_ids = choose_random_categories(self._num_of_categories)
 
-        self._categories = [untagged_files[cat_id] for cat_id in cat_ids]
+        self._categories = [untagged_files[category_id] for category_id in category_ids]
 
-        for cat in self._categories:
-            self._category_dict[cat] = []
+        for category in self._categories:
+            self._category_dict[category] = []
 
-        # Applying the selected settings
-        self._docs_per_cat = docs_per_cat
-        self._training_ratio = training_ratio
-        self._characteristic_num = characteristic_num
-        self._silent = silent
-        self._metric_type = metric_type
+    def form_doc_sets(self):
+        """
+        Based on the training ratio and _docs_per_cat limit,
+        this method groups docs of each category
+        into set E (training set) and set A (test set)
+        :return:
+        """
 
-    def _choose_docs(self):
-        for cat in self._category_dict.keys():
-            # list all docs of the category
-            partial_path = os.path.join(self._document_database_path, cat + '/')
-            cat_path = os.path.join(os.pardir, partial_path)
+        if len(self._categories) == 0:
+            print('No categories chosen.. Terminating.')
+            return
+
+        if not self._silent:
+            print('-Forming E and A sets... ', end='')
+
+        for category in self._category_dict.keys():
+            # form category dir path and list all docs within
+            partial_path = os.path.join(self._document_database_path, category + '/')
+            cat_path = os.path.join(os.path.pardir, partial_path)
             doc_list = os.listdir(cat_path)
 
-            # keep only <min(cat_size,docs_per_cat)> random docs of each category ( or all of them if docs_per_cat==-1 )
+            # keep only <min(cat_size,docs_per_cat)> random docs of each category
+            # ( or all of them if docs_per_cat==-1 )
             if self._docs_per_cat != -1 and self._docs_per_cat < len(doc_list):
                 docs_to_remove = len(doc_list) - self._docs_per_cat
 
                 for _ in range(0, docs_to_remove):
-                    del doc_list[randint(0, len(doc_list) - 1)]
+                    del doc_list[randint(1, len(doc_list) - 1)]
 
-            # add them to the doc collection and split them to E and A sets (E will have 0 in the tuple)
+            # add them to the doc collection
+            # and split them to E and A sets
             # based on the training ratio
             num_of_e_docs = int(ceil(len(doc_list) * self._training_ratio))
             for i in range(0, len(doc_list)):
                 if i < num_of_e_docs:
-                    self._category_dict[cat].append((doc_list[i], 0))
+                    self._category_dict[category].append((doc_list[i], 'E'))  # (E will have 'E' in the tuple)
                 else:
-                    self._category_dict[cat].append((doc_list[i], 1))
+                    self._category_dict[category].append((doc_list[i], 'A'))  # (A will have 'A' in the tuple)
+
+        if not self._silent:
+            print('OK')
 
     def _index_and_extract_characteristics(self):
-        # gather all docs of E collection
+        """
+        Indexing of E set docs and extraction of top
+        characteristics (highly weighted terms)
+        :return:
+        """
+        # Gather all docs of E collection
         docs_to_be_indexed = []
         for cat in self._category_dict.keys():
             for doc in self._category_dict[cat]:
-                if doc[1] == 0:
+                if doc[1] == 'E':
                     docs_to_be_indexed.append(cat + '/' + doc[0])
                 else:
                     break
 
-        # perform indexing
+        # Perform indexing
         self._total_docs_in_e = len(docs_to_be_indexed)
         indexer = DocumentIndexer(docs_to_be_indexed, self._silent)
         indexer.start()
-        # 'characteristics' will have a part of the original index, containing only the top characteristics
+
+        # 'characteristics' will have a part of the original index,
+        # containing only the top characteristics
         self._characteristics = indexer.extract_top_characteristics(self._characteristic_num)
 
     def _generate_models(self):
-        # we initialize the category model structure. It will be a dictionary with category names as keys
-        # and for each one a list of tuples (one tuple for every document already belonging in that category). The tuple
-        # will contain in the first place the filename of the document and then the vector for the characteristics
-        for cat in self._category_dict.keys():
-            self._category_models[cat] = []
-            for doc in self._category_dict[cat]:
-                if doc[1] == 1:  # we stop at the testing data
+        """
+        Initialization and update of category model structure.
+        :return:
+        """
+        # model will be a dictionary with category names as keys
+        # and for each one a list of tuples
+        # (one tuple for every document already belonging in that category).
+        # The tuple will contain the filename in first index
+        # and the vector for the characteristics in second index
+        for category in self._category_dict.keys():
+            self._category_models[category] = []
+            for doc in self._category_dict[category]:
+                if doc[1] == 'A':  # we stop at the testing data
                     break
-                self._category_models[cat].append((doc[0], [0 for _ in range(self._characteristic_num)]))
+                self._category_models[category].append((doc[0], [0 for _ in range(self._characteristic_num)]))
 
         # then we will loop our sliced index, and for every lemma/characteristic..
         self._characteristics_strings = list(self._characteristics.keys())
+
         count = 0
         for characteristic in self._characteristics_strings:
             index_data_for_characteristic = self._characteristics[characteristic]
@@ -123,7 +154,8 @@ class DocClassifier:
                 if len(file_name_parts) == 1:
                     file_name_parts = document['id'].split('\\')
 
-                # and for every single document we will go to its place in our model structure, in order to update the
+                # and for every single document
+                # find it in our model structure, in order to update the
                 # TF-IDF value of this characteristic
                 inner_count = 0
                 for doc_model in self._category_models[file_name_parts[0]]:
@@ -135,23 +167,16 @@ class DocClassifier:
             count += 1
 
     def train(self):
-        if len(self._categories) == 0:
-            print('No categories chosen.. Terminating.')
-            return
+        """
+        Performs indexing, extraction of characteristics
+        and model generation
+        :return:
+        """
 
-        # first of all we will randomly pick our doc collection (and split it to E, A according to training ratio)
-        if not self._silent:
-            print('-Choosing E and A sets.. ', end='')
-        self._choose_docs()
-        if not self._silent:
-            print('OK')
-
-        # then we will perform indexing using our DocumentIndexer and extract the characteristics
         if not self._silent:
             print('\n-Performing indexing of E set and extraction of characteristics.. ')
         self._index_and_extract_characteristics()
 
-        # and then we generate the category models using the E documents
         if not self._silent:
             print('\n-Generating category models.. ', end='')
         self._generate_models()
@@ -170,8 +195,17 @@ class DocClassifier:
         return ret
 
     def _generate_test_model(self, category, filename, wordnet_lemmatizer):
+        """
+        Calculates the characteristic vector
+        of the test doc based on tf-idf metric
+        and returns vector
+        :param category:
+        :param filename:
+        :param wordnet_lemmatizer:
+        :return:
+        """
         test_model = [0 for _ in range(self._characteristic_num)]
-        doc_path = os.path.join('../dataset/20-newsgroups/', category, filename)
+        doc_path = os.path.join('../dataset/20_newsgroups/', category, filename)
 
         with open(doc_path, encoding="Latin-1") as f:
             text_raw = "".join([" " if ch in string.punctuation else ch for ch in f.read()])
@@ -195,39 +229,83 @@ class DocClassifier:
         return test_model
 
     def test(self):
+        """
+        For each category, the test doc is compared via
+        cosine or Jaccard similarity metric to the training model
+        and results are printed
+        :return:
+        """
         wordnet_lemmatizer = WordNetLemmatizer()
         total_tests = 0
         correct_decisions = 0
-        for cat in self._category_dict.keys():
+        for category in self._category_dict.keys():
             # list all docs of the category
-            for doc in self._category_dict[cat]:
-                if doc[1] == 0:
+            for doc in self._category_dict[category]:
+                if doc[1] == 'E':  # skip training set docs
                     continue
 
                 total_tests += 1
                 if not self._silent:
-                    print('-Test #' + str(total_tests) + ' cat: ' + cat + ', doc name: ' + doc[0] + '\n-Generating model.. ', end='')
-                model = self._generate_test_model(cat, doc[0], wordnet_lemmatizer)
+                    print('-Test #' + str(total_tests) + ' category: ' + category + ', doc name: ' + doc[
+                        0] + '\n-Generating model.. ', end='')
+                model = self._generate_test_model(category, doc[0], wordnet_lemmatizer)
                 if not self._silent:
                     print('OK')
-
-                metrics = VectorMetrics(self._metric_type)
 
                 if not self._silent:
                     print('-Comparing models.. ', end='')
                 similarities = {}
-                for cat_model in self._category_models.keys():
+                for category_model in self._category_models.keys():
                     s = 0
                     c = 0
-                    for doc_model in self._category_models[cat_model]:
+                    for doc_model in self._category_models[category_model]:
                         c += 1
-                        s += metrics.calc(doc_model[1], model)
-                    similarities[cat_model] = s / c
+                        s += self._calc_similarity(doc_model[1], model)
+                    similarities[category_model] = s / c
                 decision = max(similarities, key=similarities.get)
 
-                if decision == cat:
+                if decision == category:
                     correct_decisions += 1
                 if not self._silent:
-                    print('OK\n-Decision: ' + decision + ' (Accuracy so far: ' + str(correct_decisions*100/total_tests)+'%) \n')
+                    print('OK\n-Decision: ' + decision + ' (Accuracy so far: ' + str(
+                        correct_decisions * 100 / total_tests) + '%) \n')
 
-        print('Results: ' + str(correct_decisions)+'/' + str(total_tests) + ' (' + str(correct_decisions*100/total_tests)+'%)')
+        print('Results: ' + str(correct_decisions) + '/' + str(total_tests) + ' (' + str(
+            correct_decisions * 100 / total_tests) + '%)')
+
+    def _calc_similarity(self, x, y):
+        """
+        Performs cosine or jaccard similarity calculation
+        based on metric_type setting
+        :param x:
+        :param y:
+        :return:
+        """
+        if self._metric_type == 1:
+            return self._cosine_sim(x, y)
+        elif self._metric_type == 2:
+            return self._jaccard_index(x, y)
+
+    # noinspection PyBroadException
+    def _cosine_sim(self, x, y):
+        try:
+            a = 0
+            b = 0
+            c = 0
+            for i in range(0, len(x)):
+                a += x[i] * y[i]
+                b += pow(x[i], 2)
+                c += pow(y[i], 2)
+            return a / (sqrt(b) * sqrt(c))
+        except Exception:
+            # if one of the vectors is all 0 return 0
+            return 0
+
+    def _jaccard_index(self, x, y):
+        first_set = set(x)
+        second_set = set(y)
+        index = 1.0
+        if first_set or second_set:
+            index = (float(len(first_set.intersection(second_set)))
+                     / len(first_set.union(second_set)))
+        return index
