@@ -7,5 +7,4 @@ if __name__ == '__main__':
     # instantiation of classifier, set formation, training & testing
     document_classifier = DocClassifier(Settings)
     document_classifier.form_doc_sets()
-    document_classifier.train()
-    document_classifier.test()
+    document_classifier.test_with_settings()

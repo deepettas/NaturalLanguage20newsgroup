@@ -58,25 +58,9 @@ class DocClassifier:
         if settings is None:
             settings = ClassifierSettings().generate_random_settings()
 
-        # Init classifier with selected settings
-        self._document_database_path = settings.dataset_path
-        self._tagged_docs_path = settings.tagged_documents_path
-        self._num_of_categories = settings.number_of_categories
-        self._docs_per_cat = settings.documents_per_category
-        self._training_ratio = settings.train_ratio
-        self._characteristic_num = settings.number_of_features
-        self._verbose = settings.verbose
-        self._metric_type = settings.evaluation_metric
+        self._update_settings(settings)
 
-        # Load all untagged files
-        untagged_files = [f for f in os.listdir(os.path.join(os.path.pardir, settings.dataset_path))]
-
-        category_ids = choose_random_categories(self._num_of_categories)
-
-        self._categories = [untagged_files[category_id] for category_id in category_ids]
-
-        for category in self._categories:
-            self._category_dict[category] = []
+        self.trained = False
 
     def form_doc_sets(self):
         """
@@ -203,6 +187,32 @@ class DocClassifier:
         if self._verbose:
             print('\n|Training Complete!\n')
 
+        self.trained = True
+
+        return True
+
+    def _update_settings(self, settings):
+        # Init classifier with selected settings
+        self._document_database_path = settings.dataset_path
+        self._tagged_docs_path = settings.tagged_documents_path
+        self._num_of_categories = settings.number_of_categories
+        self._docs_per_cat = settings.documents_per_category
+        self._training_ratio = settings.train_ratio
+        self._characteristic_num = settings.number_of_features
+        self._verbose = settings.verbose
+        self._metric_type = settings.evaluation_metric
+
+        # Load all untagged files
+        untagged_files = [f for f in os.listdir(os.path.join(os.path.pardir, settings.dataset_path))]
+
+        category_ids = choose_random_categories(self._num_of_categories)
+
+        self._categories = [untagged_files[category_id] for category_id in category_ids]
+
+        for category in self._categories:
+            self._category_dict[category] = []
+
+
     @staticmethod
     def _remove_closed_class_categories(tagged):
         ret = []
@@ -247,50 +257,6 @@ class DocClassifier:
 
         return test_model
 
-    def test(self):
-        """
-        For each category, the test doc is compared via
-        cosine or Jaccard similarity metric to the training model
-        and results are printed
-        :return:
-        """
-        wordnet_lemmatizer = WordNetLemmatizer()
-        total_tests = 0
-        correct_decisions = 0
-        for category, doc_list in self._category_dict.items():
-            # list all docs of the category
-            for doc in doc_list:
-
-                if doc[1] == 'E':  # skip training set docs
-                    continue
-
-                total_tests += 1
-
-
-                prediction_model = self._generate_test_model(category, doc[0], wordnet_lemmatizer)
-
-
-                similarities = {}
-                for category_model, doc_models in self._category_models.items():
-                    s,c = (0,0)
-                    for doc_model in doc_models:
-                        c += 1
-                        s += self._calc_similarity(doc_model[1], prediction_model)
-                    similarities[category_model] = s / c
-                decision = max(similarities, key=similarities.get)
-
-                if decision == category:
-                    correct_decisions += 1
-                if self._verbose:
-                    print('\r|Test #' + str(total_tests) +  '-Accuracy: ' +
-                          str( round(correct_decisions * 100 / total_tests,3)) + '% '+
-                          '|Category: ' + category + ', doc name: ' + doc[0] +
-                          '|Decision: ' + decision , end="")
-
-        print()
-        print('\nPrediction fitness: ' + str(correct_decisions) + '/' + str(total_tests) + ' correct. (' + str(
-            correct_decisions * 100 / total_tests) + '%)', end="")
-
     def _calc_similarity(self, x, y):
         """
         Performs cosine or jaccard similarity calculation
@@ -325,3 +291,56 @@ class DocClassifier:
             index = (float(len(first_set.intersection(second_set)))
                      / len(first_set.union(second_set)))
         return index
+
+    def test_with_settings(self, settings = None):
+        """
+                For each category, the test doc is compared via
+                cosine or Jaccard similarity metric to the training model
+                and results are printed
+                :return:
+                """
+
+        if settings:
+            self._update_settings(settings)
+            print('Reforming doc sets')
+            self.form_doc_sets()
+
+        if not self.train():
+            return -1
+
+
+
+        wordnet_lemmatizer = WordNetLemmatizer()
+        total_tests = 0
+        correct_decisions = 0
+        for category, doc_list in self._category_dict.items():
+            # list all docs of the category
+            for doc in doc_list:
+
+                if doc[1] == 'E':  # skip training set docs
+                    continue
+
+                total_tests += 1
+
+                prediction_model = self._generate_test_model(category, doc[0], wordnet_lemmatizer)
+
+                similarities = {}
+                for category_model, doc_models in self._category_models.items():
+                    s, c = (0, 0)
+                    for doc_model in doc_models:
+                        c += 1
+                        s += self._calc_similarity(doc_model[1], prediction_model)
+                    similarities[category_model] = s / c
+                decision = max(similarities, key=similarities.get)
+
+                if decision == category:
+                    correct_decisions += 1
+                if self._verbose:
+                    print('\r|Test #' + str(total_tests) + '-Accuracy: ' +
+                          str(round(correct_decisions * 100 / total_tests, 3)) + '% ' +
+                          '|Category: ' + category + ', doc name: ' + doc[0] +
+                          '|Decision: ' + decision, end="")
+
+        print()
+        print('\nPrediction fitness: ' + str(correct_decisions) + '/' + str(total_tests) + ' correct. (' + str(
+            correct_decisions * 100 / total_tests) + '%)', end="")
